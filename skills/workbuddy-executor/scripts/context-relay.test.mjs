@@ -1,0 +1,24 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {validateCheckpoint,validateHubBoundary,sha,atomic,isReadContention} from './context-relay.mjs';
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'wb-relay-'));
+const workspace=path.join(root,'workspace');fs.mkdirSync(workspace);
+const data=path.join(workspace,'data.json');fs.writeFileSync(data,'{"nonce":123}');
+const cp=path.join(workspace,'checkpoint.json');
+const task={taskId:'task1',attemptId:'attempt1',sessionId:'session1',runtimeSource:'desktop_queue',state:'blocked',report:{rawText:'CONTEXT_HANDOFF_REQUIRED'}};
+const valid=()=>({task_id:'task1',attempt_id:'attempt1',session_id:'session1',signal:'CONTEXT_HANDOFF_REQUIRED',safe_to_resume:true,inflight:[],files:[{path:'data.json',sha256:sha(data)}]});
+function check(change={}, t=task){atomic(cp,{...valid(),...change});return validateCheckpoint({workspace},t,cp);}
+test('complete bound checkpoint is resumable',()=>assert.equal(check().task_id,'task1'));
+test('working task must never rotate',()=>assert.throws(()=>check({}, {...task,state:'working'})));
+test('generic blocked error must not bypass input/permission',()=>assert.throws(()=>check({}, {...task,report:{rawText:'permission denied'}})));
+test('wrong attempt or session rejected',()=>{assert.throws(()=>check({attempt_id:'old'}));assert.throws(()=>check({session_id:'other'}));});
+test('unconfirmed side effect rejected',()=>{assert.throws(()=>check({inflight:['pending write']}));assert.throws(()=>check({safe_to_resume:false}));});
+test('changed file rejected',()=>{atomic(cp,valid());fs.appendFileSync(data,' ');assert.throws(()=>validateCheckpoint({workspace},task,cp));});
+test('path escape rejected even with matching hash',()=>{const f=path.join(root,'outside');fs.writeFileSync(f,'x');assert.throws(()=>check({files:[{path:'../outside',sha256:sha(f)}]}));});
+test('missing evidence rejected',()=>{assert.throws(()=>check({files:[]}));assert.throws(()=>check({inflight:null}));});
+test('Hub capacity and exact attempt binding enforced',()=>{const h={providerTaskId:task.taskId,attemptId:task.attemptId,sessionId:task.sessionId,holdsCapacity:false,status:'blocked'};validateHubBoundary(h,task);assert.throws(()=>validateHubBoundary({...h,holdsCapacity:true},task));assert.throws(()=>validateHubBoundary({...h,attemptId:'different'},task));});
+test('only the exact read contention is retried, not unknown dispatch errors',()=>{assert.equal(isReadContention(Error('Queue record is busy; retry this call without resending the task')),true);assert.equal(isReadContention(Error('Dispatch receipt uncertain')),false);assert.equal(isReadContention(Error('permission denied')),false);});
+test.after(()=>fs.rmSync(root,{recursive:true,force:true}));

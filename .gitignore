@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite*
+*.log
+*.state.json*
+*.model-confirmation.json
+workbuddy-binding.json
+.DS_Store

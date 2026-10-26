@@ -1,0 +1,18 @@
+{
+  "codex_project_root": "C:/Projects/example",
+  "workbuddy_space_name": "示例项目空间",
+  "workbuddy_workspace": "C:/Workspaces/example",
+  "artifact_roots": [
+    "C:/Projects/example/outputs"
+  ],
+  "session_id": null,
+  "task_id": null,
+  "attempt_id": null,
+  "model_confirmation": {
+    "model": null,
+    "confirmed_at": null,
+    "scope": "仅本项目、准确会话与本轮任务；示例不构成确认"
+  },
+  "runtime_source": null,
+  "state": "unconfigured"
+}
